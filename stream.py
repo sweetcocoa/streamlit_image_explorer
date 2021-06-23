@@ -9,54 +9,69 @@ from PIL import Image
 import SessionState
 import cv2
 
-DATA_URL_ROOT = 'https://raw.githubusercontent.com/sweetcocoa/streamlit_data_explorer/master/'
+DATA_URL_ROOT = (
+    "https://raw.githubusercontent.com/sweetcocoa/streamlit_image_explorer/master/"
+)
 session_state = SessionState.get(image_idx=0)
 files = dict(train=list(), val=list())
-data_split = 'train'
+data_split = "train"
+test_on_local = False
 
 
-def get_file_list(base_path):
-    images = sorted(glob.glob(f"{base_path}/**/*.png", recursive=True))
-    return images
+if test_on_local:
+
+    def get_file_list(base_path):
+        images = sorted(glob.glob(f"{base_path}/**/*.png", recursive=True))
+        images = [image.replace("\\", "/") for image in images]
+        return images
+
+    @st.cache(show_spinner=False)
+    def get_file_content_as_string(path):
+        return open(path, "r").read()
+
+    @st.cache(show_spinner=False)
+    def load_image(url, resize=None):
+        image = cv2.imread(url, cv2.IMREAD_COLOR)
+        if resize is not None:
+            image = cv2.resize(image, dsize=resize, interpolation=cv2.INTER_LINEAR)
+
+        image = image[:, :, [2, 1, 0]]  # BGR -> RGB
+        return image
 
 
-@st.cache(show_spinner=False)
-def get_file_content_as_string(path):
-    global DATA_URL_ROOT
-    url = DATA_URL_ROOT + path
-    response = urllib.request.urlopen(url)
-    return response.read().decode("utf-8")
+else:
 
+    def get_file_list(base_path):
+        images = sorted(glob.glob(f"{base_path}/**/*.png", recursive=True))
+        images = [(DATA_URL_ROOT + image).replace("\\", "/") for image in images]
+        return images
 
-@st.cache(show_spinner=False)
-def load_image(url, resize=None):
-    with urllib.request.urlopen(url) as response:
-        image = np.asarray(bytearray(response.read()), dtype="uint8")
-    image = cv2.imdecode(image, cv2.IMREAD_COLOR)
-    if resize is not None:
-        image = cv2.resize(image, dsize=resize, interpolation=cv2.INTER_LINEAR)
+    @st.cache(show_spinner=False)
+    def get_file_content_as_string(path):
+        global DATA_URL_ROOT
+        url = DATA_URL_ROOT + path
+        response = urllib.request.urlopen(url)
+        return response.read().decode("utf-8")
 
-    image = image[:, :, [2, 1, 0]]  # BGR -> RGB
-    return image
+    @st.cache(show_spinner=False)
+    def load_image(url, resize=None):
+        with urllib.request.urlopen(url) as response:
+            image = np.asarray(bytearray(response.read()), dtype="uint8")
+        image = cv2.imdecode(image, cv2.IMREAD_COLOR)
+        if resize is not None:
+            image = cv2.resize(image, dsize=resize, interpolation=cv2.INTER_LINEAR)
 
-
-# @st.cache
-# def open_image(path, resize=(32, 32)):
-#     # image = cv2.imread(path, cv2.IMREAD_COLOR)
-#     # # image = cv2.imdecode(image, cv2.IMREAD_COLOR)
-#     # image = image[:, :, [2, 1, 0]] # BGR -> RGB
-#     image = Image.open(path)
-#     image = image.resize(resize, Image.BILINEAR)
-#     return image
+        image = image[:, :, [2, 1, 0]]  # BGR -> RGB
+        return image
 
 
 def label_of(path):
-    return path.split(os.path.sep)[-2]
+    return path.split("/")[-2]
 
 
 def split_of(path):
     # print(path)
-    return path.split(os.path.sep)[-3]
+    return path.split("/")[-3]
 
 
 def image_explorer():
@@ -66,17 +81,28 @@ def image_explorer():
 
     title_columns = st.beta_columns(2)
     data_split = title_columns[0].radio("Choose data split", ("train", "val"))
-    is_resized = title_columns[1].checkbox("Resize", value=False, )
+    is_resized = title_columns[1].checkbox(
+        "Resize",
+        value=False,
+    )
 
     # data_split = st.
-    num_images_row = st.slider("Number of Images in a Row", min_value=1, max_value=10, value=1, step=1, format=None,
-                               key=None, help=None)
+    num_images_row = st.slider(
+        "Number of Images in a Row",
+        min_value=1,
+        max_value=10,
+        value=1,
+        step=1,
+        format=None,
+        key=None,
+        help=None,
+    )
     num_images_col = 5
     number_of_images_in_page = int(num_images_col * num_images_row)
 
     exploer_buttons = st.beta_columns(2)
-    prev_button = exploer_buttons[0].button("Prev")
-    next_button = exploer_buttons[1].button("Next")
+    prev_button = exploer_buttons[0].button("Prev Images")
+    next_button = exploer_buttons[1].button("Next Images")
 
     if prev_button:
         image_idx = max(image_idx - number_of_images_in_page, 0)
@@ -93,14 +119,26 @@ def image_explorer():
         start_idx = image_idx + i * num_images_col
         end_idx = min(start_idx + num_images_col, len(files[data_split]))
 
-        print(start_idx, end_idx)
+        # print(start_idx, end_idx)
         if not is_resized:
-            # columns[i].header(f"label [ {label} ] ")
-            columns[i].image(files[data_split][start_idx:end_idx],
-                             caption=[label_of(files[data_split][i]) for i in range(start_idx, end_idx)])
+            columns[i].image(
+                files[data_split][start_idx:end_idx],
+                caption=[
+                    f"{label_of(files[data_split][i])}, {i}"
+                    for i in range(start_idx, end_idx)
+                ],
+            )
         else:
-            columns[i].image([load_image(files[data_split][i], resize=(32, 32)) for i in range(start_idx, end_idx)],
-                             caption=[f"{label_of(files[data_split][i])}, {i}" for i in range(start_idx, end_idx)])
+            columns[i].image(
+                [
+                    load_image(files[data_split][i], resize=(32, 32))
+                    for i in range(start_idx, end_idx)
+                ],
+                caption=[
+                    f"{label_of(files[data_split][i])}, {i}"
+                    for i in range(start_idx, end_idx)
+                ],
+            )
 
 
 def main():
@@ -115,13 +153,15 @@ def main():
         split = split_of(file)
         files[split].append(file)
 
-    app_mode = st.sidebar.selectbox("Choose the app mode",
-                                    ["Show instructions", "Launch", "Show the source code"])
+    app_mode = st.sidebar.selectbox(
+        "Choose the app mode", ["Show instructions", "Launch", "Show the source code"]
+    )
     if app_mode == "Show instructions":
         st.sidebar.success('To Launch Explorer, Select "Launch".')
+
     elif app_mode == "Show the source code":
         front_text.empty()
-        st.code(open("stream.py", "r").read())
+        st.code(get_file_content_as_string("stream.py"))
     elif app_mode == "Launch":
         front_text.empty()
         image_explorer()
