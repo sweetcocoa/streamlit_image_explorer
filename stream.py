@@ -1,11 +1,8 @@
 import streamlit as st
-import altair as alt
-import pandas as pd
 import numpy as np
 import os
 import urllib
 import glob
-from PIL import Image
 import SessionState
 import cv2
 
