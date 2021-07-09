@@ -6,13 +6,17 @@ import glob
 import SessionState
 import cv2
 
+# DATA_URL_ROOT = st.secrets['DATA_URL_ROOT']
+# DATA_URL_ROOT = "data/"
 DATA_URL_ROOT = (
     "https://raw.githubusercontent.com/sweetcocoa/streamlit_image_explorer/master/"
 )
+
 session_state = SessionState.get(image_idx=0)
 files = dict(train=list(), val=list())
 data_split = "train"
 test_on_local = False
+
 
 
 if test_on_local:
